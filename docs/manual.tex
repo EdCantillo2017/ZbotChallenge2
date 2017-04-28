@@ -1,0 +1,964 @@
+\documentclass {article}
+
+\usepackage {verbatim}
+\usepackage {anysize}
+\usepackage {graphicx}
+\usepackage {color}
+\usepackage [pdftex]{hyperref}
+\hypersetup{colorlinks=true, urlcolor=cyan, linkcolor=blue}
+
+\marginsize {1in}{1in}{.5in}{.5in}
+
+\begin {document}
+\noindent {\Huge {{COIL: The Create Open Interface Library}}} \\
+{\large {Installation and Usage Guide}} \\
+Author: Jesse DeGuire \\
+\\
+\\
+Certain words and phrases in this document are in color and are links
+that can be clicked on when reading this document in almost any PDF
+viwer.  \textcolor{blue}{Blue} links, like in the Table of Contents
+below, will take you to another part of this document.
+\textcolor{cyan}{Cyan} links will
+open up your default web browser and take you to a web page. \\
+\\
+
+\tableofcontents
+\newpage
+
+
+\section {Introduction}
+Welcome!  Thank you for downloading and trying out COIL, the Create
+Open Interface Library.  This section will explain what the Create is,
+how it is controlled, and how this library can help.  Start here to
+get a brief overview of the entire system before you go diving into
+it.
+
+\subsection {The iRobot Create}
+The Create is a robot that was released by the iRobot Corporation in
+2007 in response to users hacking on its popular Roomba vacuum robot.
+The Create is designed as a hobby robot and is meant to allow its
+users to program it and get started in the world of robotics.  The
+Create does away with the Roomba's vacuum and replaces it with a cargo
+bay and a 25-pin expansion port, allowing you to add your own
+extensions to the robot, such as servos, IR blasters, and even tiny
+computers.  The Create includes 10 built-in demos for you to play with
+and 42 sensors for you to monitor its operation.  For more
+information, go to
+\href{http://www.irobot.com/sp.cfm?pageid=305}{iRobot's Create
+  webpage}.
+
+\subsection {The Create Open Interface}
+The Create accepts commands through its serial port, located right
+above the charging jack.  Commands can be sent to it from a computer
+using almost any serial-writing program.  These commands consist of
+one-byte (range: 0-255) commands, called ``opcodes'', which can have
+additional one-byte parameters passed to the robot with them.  This is
+a very simple interface and the range of commands you can send to the
+Create allows for a great deal of freedom in manipulaing the robot.
+However, the Create can only memorize up to 100 bytes worth of
+commands in a script, meaning it cannot really do much on its own.
+Also, sending commands in this interface is difficult and tedious.
+iRobot sells an accessory called the Command Module which allows for
+more advanced programming, but it costs more money and is not powerful
+enough to do advanced functions such as process images from a
+webcam. \\
+\\
+For more infomation on the Create OI, download the Open Interface
+Specification from
+\href{http://www.irobot.com/sp.cfm?pageid=294}{iRobot's download
+  page}.
+
+\subsection {COIL: Create Open Interface Library}
+This library is a C wrapper for the Open Interface opcodes provided
+with the Create.  What that means is that the user calls a C function
+to make the robot do something.  That C function internally sends the
+Create the proper opcodes to make that happen.  Additional
+functionality not found in the Create OI is included as well as a
+convenience to the user.  This makes programming against the Create
+much easier than having to send opcodes on your own, while allowing
+the user to
+perform more advanced tasks and leverage the many C libraries availble. \\
+\\
+As of version 1.1 COIL can operate in one of two modes.  In the
+default mode, calls to COIL functions are simple wrappers around open
+interface commands; requests are passed directly to the create.  In
+multi-threaded mode, there is a dedicated thread that queries the
+Create sensor values and stores those values in a cache.  User
+requests for sensor values are then read from the cache, and do not
+result in additional queries to the robot.  Multi-threaded mode has
+the advantage of lower sensor latency from the perspective of user
+programs and should be preferred in most cases.  See the descriptions
+of startOI and startOI\_MT in the function reference section for more
+details.\\ 
+\\
+COIL can be run on any POSIX-compliant operating system, such as Linux
+and Mac OSX.  It is possible to connect a small laptop or even smaller
+computers such as the Gumstix series to the Create to make it a
+fully-functioning system.  A Windows verion of the library is not yet
+avaible, but is planned.
+
+\newpage
+
+
+\section {Installing COIL}
+Installing COIL is just like compiling and installing many
+applications for Linux and OSX and is easy to do.  All you need are
+the build tools for your operating system, which you already have if
+you have built programs on your computer before.  For Linux, you will
+need to download packages for GCC and Make (if you have Ubuntu, just
+get the {\tt build-essential} package).  For OSX, just load the Apple
+Developer Tools from either your OSX installation media or from
+Apple's
+\href{http://developer.apple.com/}{developer site}. \\
+\\
+Open up a console or Terminal and navigate to where you put the files
+for this library (one directory above where you found this manual).
+Run {\bf make} and then (as root) {\bf make install}
+to compile the library and install it to {\it /usr/local/lib}. \\
+\\
+{\bf Note:} OpenCV and the CreateOI library are installed in {\it
+  /usr/local} by default, but some Linux distributions do not look in
+there.  To tell it to do so, create a new file in {\it
+  /etc/ld.so.conf.d/}.  It should not matter what you call the file,
+just end it with {\it .conf}.  In it, put the path you need the distro
+to look in--in our case {\tt /usr/local/lib}--and save the
+file.  Now execute {\tt ldconfig -v} as root in a terminal to make that path active. \\
+\\
+To uninstall the library, run {\bf make uninstall} as root.
+
+
+\section {Compiling and Running Programs}
+If you want to use COIL functions in your program, just include the
+header {\it createoi.h}.
+\\ \\
+Compiling a program that uses COIL can be done using GCC.  Open up a
+console or Terminal and navigate to where your program is located.
+Tell GCC to link against COIL with the command line option {\tt
+  -lcreateoi}.  For example, if your program is in the file {\it
+  foo.c}, then you would compile it with the follwing command:
+
+\begin {quote}
+  {\tt gcc -o foo foo.c -lcreateoi}
+\end {quote}
+
+\noindent Connect your computer to the Create and turn it on.  You can
+then run your program like normal.
+
+\newpage
+
+
+\section {Function Reference}
+% ------------------- Macro definitions -------------------
+%% Basic data types
+\newcommand {\lng} {{\bf long\ }} \newcommand {\short} {{\bf short\ }}
+\newcommand {\cint} {{\bf int\ }} \newcommand {\flt} {{\bf float\ }}
+\newcommand {\dbl} {{\bf double\ }} \newcommand {\cchar} {{\bf char\
+  }} \newcommand {\fail} {{\tt INT\_MIN\ }}
+%
+%% COIL data types
+\newcommand {\byte} {\hyperlink{oibyte}{{\bf byte\ }}} \newcommand
+{\oiled} {\hyperlink{oiled}{{\bf oi\_led\ }}} \newcommand {\oibaud}
+{\hyperlink{oibaud}{{\bf oi\_baud\ }}} \newcommand {\oidemo}
+{\hyperlink{oidemo}{{\bf oi\_demo\ }}} \newcommand {\oisensor}
+{\hyperlink{oisensor}{{\bf oi\_sensor\ }}} \newcommand {\oicommand}
+{\hyperlink{oicommand}{{\bf oi\_command\ }}} \newcommand {\oioutput}
+{\hyperlink{oioutput}{{\bf oi\_output\ }}}
+%
+%% Formatting
+\newcommand {\func}[2]{\hypertarget{#2}{{\tt #1}} \\} \newcommand
+{\ret}[1] {{\bf Returns:} #1} \newcommand {\retnorm} {{\bf Returns:} 0
+  on success or -1 on error} \newenvironment {params}{{\bf
+    Parameters:} \vspace{-9pt} \begin {quote} \begin {description}}
+    {\end {description} \end {quote}}
+% -------------------- End Definitions --------------------
+
+This is a list of the functions available for use with the Create,
+along with descriptions of what they do.  Some functions require
+special types as one of the parameters.  See the
+\hyperlink{datatypes}{Data types} section for more information on
+those types.
+
+\subsection {Setup and Miscellaneous}
+Functions listed here do not directly control the Create, but are used
+for setting up communication to the robot, changing its mode, and so
+on.
+
+\begin {itemize}
+
+\item \func {\cint startOI (\cchar * serial)} {startoi} Opens the
+  specified serial port to the Create and starts the Open Interface.
+  The Create will be started in Passive Mode.  This command or
+  startOI\_MT must be called first before any others.
+  \\
+  \begin {params}
+  \item [serial] The location of the serial port connected to the
+    Create
+  \end {params}
+  \retnorm
+
+\item \func {\cint startOI\_MT (\cchar * serial)} {startoi_mt}
+   	This command starts the interface in multithreaded mode.  In 
+       this mode, a dedicated thread reads all sensor values periodically
+       and caches the values.  Subsequent calls to get* sensor commands
+      will read from the cache instead of querying the create. \\
+  \begin {params}
+  \item [serial] The location of the serial port connected to the
+    Create
+  \end {params}
+  \retnorm
+ 
+\item \func {\cint setBaud (\oibaud rate)} {setbaud} Sets the baud
+  rate between the Create and the computer and waits for 100$ms$ after
+  changing
+  (in compliance with the OI specification).  The default is 56kbps. \\
+  {\bf Note:} At a baud rate of 115200bps, there must be a 20$\mu s$
+  gap between each byte
+  or else data loss will occur. \\
+  \begin {params}
+  \item [rate] New baud rate.  Must be one of \oibaud
+  \end {params}
+  \retnorm
+
+\item \func {\cint enterPassiveMode ()} {enterpm} Puts the Create into
+  Passive Mode.  This mode allows reading sensor data, running demos,
+  and
+  changing mode.  All other commands are ignored. \\
+  \retnorm
+
+\item \func {\cint enterSafeMode ()} {entersm} Puts the Create into
+  Safe Mode, allowing control over the Create.  The Create will stop
+  and revert to Passive Mode if the cliff or wheel drop sensors are
+  activated or if the charger is
+  plugged in and powered. \\
+  \retnorm
+
+\item \func {\cint enterFullMode ()} {enterfm} Puts the Create into
+  Full Mode, allowing complete control over the Create.  The Create's
+  safety features will be turned off in this mode, putting the
+  responsibility of keeping the
+  Create from falling in the programmer's hands. \\
+  \retnorm
+
+\item \func {\cint stopOI ()} {stopoi} Stops the Create and closes the
+  serial connection to it.  The connection can be restarted
+  by calling \hyperlink {startoi}{{\tt startOI}}. \\
+  \retnorm
+
+\item \func {{\bf void} enableDebug ()} {enabledebug} Turns on
+  debugging, which will print serial transfers to the console window.
+  Reads and writes will be printed in byte-aligned format as they
+  would be transmitted through the serial port.
+
+\item \func {{\bf void} disableDebug ()} {disabledebug} Turns off
+  debugging so that serial transfers will no longer be printed to the
+  console.
+\end {itemize}
+
+\subsection {Drive and Demo}
+Functions here are used to control the Create's movement.  You can
+move the Create either through its built-in demos or by directly
+controlling its wheel movements.  You can also tell the Create to wait
+for a given period before performing the next action.
+
+\begin {itemize}
+\item \func {\cint drive (\short vel, \short rad)} {drive} Drives the
+  Create with the given velocity (in $mm/s$) and turning radius
+  ($mm$).  The velocity ranges from -500 to 500$mm/s$, with negative
+  velocities driving the Create
+  backward. \\
+  The radius ranges from from -2000 to 2000$mm$, with positive radii
+  turning the Create left
+  and negative radii turning it right. \\
+  A radius of -1 spins the Create in place clockwise and 1 spins it
+  counter-clockwise.  A
+  radius of 0 will make it drive straight. \\
+  \begin {params}
+  \item [vel] The velocity, in $mm/s$, of the robot
+  \item [rad] The turning radius, in $mm$, from the center of the
+    turning circle to the center of the Create
+  \end {params}
+  \retnorm
+
+\item \func {\cint directDrive (\short Lwheel, \short Rwheel)}
+  {directdrive} Controls the velocity of each drive wheel
+  independently.  Velocities range from -500 to
+  500$mm/s$, with negative values driving that wheel backward. \\
+  \begin {params}
+  \item [Lwheel] The velocity of the left wheel
+  \item [Rwheel] The velocity of the right wheel
+  \end {params}
+  \retnorm
+
+\item \func {\cint driveDistance (\short vel, \short rad, \cint dist,
+    \cint interrupt)} {drivedistance} Moves the Create at the
+  specified velocity and turning radius until the specified distance
+  is reached, at which point it will stop. If {\tt interrupt} is
+  non-zero, the Create will stop if it detects a possible collision
+  (bump, cliff, overcurrent, or wheel
+  drop sensors are activated). \\
+  Velocity ranges from -500 to 500$mm/s$ (negative values move
+  backward) and turning radius ranges from -2000 to 2000$mm$ (negative
+  values turn right; positive values turn left).  A radius of -1 will
+  spin the Create in place clockwise and a radius of 1 will spin it
+  counter-clockwise.  A radius of 0 will drive straight. \\
+  Be careful to check your inputs so that the Create does not get
+  stuck in this function.  For
+  example, make sure you do not pass a negative distance and a positve velocity. \\
+  \begin {params}
+  \item [vel] Desired velocity in $mm/s$
+  \item [rad] Desired turning radius in $mm$
+  \item [dist] Distance in $mm$ the Create should travel before
+    stopping
+  \item [interrupt] Set to 0 to have the Create ignore collisions or
+    non-zero to have it stop on collision
+  \end {params}
+  \ret Distance travelled or \fail on error
+
+\item \func {\cint turn (\short vel, \short rad, \cint angle, \cint
+    interrupt)} {turn} Moves the Create at the specified velocity and
+  turning radius until the specified angle is reached, at which point
+  it will stop.  If {\tt interrupt} is non-zero, the Create will stop
+  if it detects a possible collision (bump, cliff, overcurrent, or
+  wheel
+  drop sensors are activated). \\
+  Velocity ranges from -500 to 500$mm/s$ (negative values move
+  backward) and turning radius ranges from -2000 to 2000$mm$ (negative
+  values turn right; positive values turn left).  A radius of -1 will
+  spin the Create in place clockwise and a radius of 1 will spin it
+  counter-clockwise.  A radius of 0 will drive straight. \\
+  Be careful to check your inputs so that the Create does not get
+  stuck in this function.  For
+  example, make sure you do not tell the Create to drive straight with this function. \\
+  \begin {params}
+  \item [vel] Desired velocity in $mm/s$
+  \item [rad] Desired turning radius in $mm$
+  \item [angle] Angle in degrees the Create should turn before
+    stopping
+  \item [interrupt] Set to 0 to have the Create ignore collisions or
+    non-zero to have it stop on collision
+  \end {params}
+  \ret Angle turned or \fail on error
+
+\item \func {\dbl waitTime (\dbl time)} {waittime} Waits the given
+  amount of time, in seconds.  The timer has a resolution of 1
+  microsecond, or $1\times 10^{-6}$ seconds; however, accuracy of this
+  function cannot be specified as
+  that depends on the accuracy of the operating system's timer. \\
+  \begin {params}
+  \item [time] Time to wait, in seconds
+  \end {params}
+  \ret Time passed in as parameter to this function
+
+\item \func {\cint waitDistance (\cint dist, \cint interrupt)}
+  {waitdist} Waits for the Create to travel the given distance (in
+  millimeters).  Distance is incremented when the Create travels
+  forward and decremented when it travels backward.  If the wheels are
+  passively rotated in either direction, the distance is incremented.
+  The
+  distance sensor will be reset after using this function. \\
+  If {\tt interrupt} is non-zero, this function will exit if the
+  Create detects a possible
+  collision (bump, cliff, overcurrent, or wheel drop sensors are activated). \\
+  The distance travelled is updated once per $20ms$ or 50 times per second. \\
+  \begin {params}
+  \item [dist] Distance to travel in millimeters
+  \item [interrupt] Set to 0 to ignore collisions or non-zero to have
+    this function exit on collision
+  \end {params}
+  \ret Distance travelled or \fail on error
+
+\item \func {\cint waitAngle (\cint angle, \cint interrupt)}
+  {waitangle} Waits for the Create to turn the given angle (in
+  degrees).  The angle is incremented when the Create turns
+  counterclockwise and decremented when it turns clockwise.  The angle
+  sensor will be reset after using this function.  \\
+  If {\tt interrupt} is non-zero, this function will exit if the
+  Create detects a possible
+  collision (bump, cliff, overcurrent, or wheel drop sensors are activated). \\
+  The angle turned is updated once per $20ms$ or 50 times per second. \\
+  \begin {params}
+  \item [angle] Angle to turn in degrees
+  \item [interrupt] Set to 0 to ignore collisions or non-zero to have
+    this function exit on collsion
+  \end {params}
+  \ret Angle turned or \fail on error
+        
+\item \func {\cint runDemo (\oidemo demo)} {rundemo} Starts one of the
+  Create's demo routines.  Information about each demo is available in
+  the
+  iRobot Create instruction manual.  This will put the Create into Passive Mode. \\
+  \begin {params}
+  \item [demo] The demo to run (or {\tt DEMO\_ABORT} to stop the
+    current demo)
+  \end {params}
+  \retnorm
+
+\item \func {\cint runCoverDemo ()} {runcoverdemo}
+  Runs the Cover demo. \\
+  \retnorm
+
+\item \func {\cint runCoverAndDockDemo ()} {runcadd}
+  Runs the Cover and Dock demo. \\
+  \retnorm
+
+\item \func {\cint runSpotDemo ()} {runspotdemo}
+  Runs the Spot demo. \\
+  \retnorm
+\end {itemize}
+
+\subsection {Extra Functionality}
+These allow control over the Create's expansion port outputs, LEDs,
+and song and scripting capabilities.
+
+\begin {itemize}
+\item \func {\cint setLEDState (\oiled lflags, \byte pColor, \byte
+    pInten)} {setledstate} Controls the state of the LEDs on top of
+  the Create.  The Play and Advance LEDs are green and can either on
+  or off.  Control these by using the \oiled flags and the logical-OR
+  operator ({\tt |}).  The Power LED is set with two bytes: one for
+  the LEDs color and the other for the light's intensity (higher
+  values are brighter).  The color ranges from green
+  (0) to red (255). \\
+  For example, to turn on both LEDs pass {\tt LED\_ADVANCE |
+    LED\_PLAY} as the first parameter
+  of this function.  To turn them off, just pass 0 as the first paramter. \\
+  \begin {params}
+  \item [lflags] LED flags for setting the Play and Advance LEDs
+  \item [pColor] Color of the Power LED
+  \item [pInten] Intesity of the Power LED
+  \end {params}
+  \retnorm
+
+\item \func {\cint setDigitalOuts (\oioutput oflags)} {setdo} Controls
+  the state of the three digital outputs in the 25-pin expansion port.
+  Each output is able to provide up to $20mA$ of current.  The state
+  is set using bit flags.  For example, to turn on ports 0 and 2, pass
+  {\tt OUTPUT\_0 | OUTPUT\_2} to this function.  Pass 0 to turn
+  them all off. The outputs provide $5V$ when active and $0V$ when inactive. \\
+  \begin {params}
+  \item [oflags] Output flags for setting the state of the digital
+    outputs
+  \end {params}
+  \retnorm
+
+\item \func {\cint setPWMLowSideDrivers (\byte pwm0, \byte pwm1, \byte
+    pwm2)} {setpwmlsd} Specifies the PWM (Pulse Width Modulation) duty
+  cycle for each of the three low side drivers in the Create, with a
+  maximum value of 128.  For example, sending a value of 64 would
+  control a driver with with 50\% of battery voltage since $128/64 = 0.5$. \\
+  Low side drivers 0 and 1 can provide up to $0.5A$ of current wihle
+  driver 2 can provide up to $1.5A$.  If too much current is drawn,
+  the current will be limited and the overcurrent
+  flag in sensor packet 14 (overcurrent sensor) will be set. \\
+  \begin {params}
+  \item [pwm0] duty cycle for driver 0
+  \item [pwm1] duty cycle for driver 1
+  \item [pwm2] duty cycle for driver 2
+  \end {params}
+  \retnorm
+
+\item \func {\cint setLowSideDrivers (\oioutput oflags)} {setlsd}
+  Controls the state of the three low side drivers using bit flags.
+  For example, to turn on low side drivers 0 and 1, pass {\tt
+    OUTPUT\_0 | OUTPUT\_1} to this function.  This command activates
+  drivers at 100\% PWM duty cycle.  Low side drivers 0 and 1 can
+  provide up to $0.5A$ of current wihle driver 2 can provide up to
+  $1.5A$.  If too much current is drawn, the current will be limited
+  and the overcurrent flag in sensor packet 14 (overcurrent
+  sensor) will be set. \\
+  \begin {params}
+  \item [oflags] Output flags for setting the state of the three
+    drivers
+  \end {params}
+  \retnorm
+
+\item \func {\cint sendIRbyte (\byte irbyte)} {sendirbyte} Sends the
+  given IR byte out of low side driver 1, using the format expected by
+  the Create's IR sensor.  The Create documentation suggests using a
+  $100ohm$ resistor in parallel with an
+  IR LED and its resistor. \\
+  \begin {params}
+  \item [irbyte] The byte value to send
+  \end {params}
+  \retnorm
+
+\item \func {\cint writeSong (\byte number, \byte length, \byte*
+    song)} {writesong} Writes and stores a small song into the
+  Create's internal memory.  You can store up to 16 songs, with up to
+  16 notes per song.  Each note is associated with a sound from the
+  Create's internal MIDI sequencer, with 31 being the lowest pitch and
+  127 being the highest.  Any value outside that range is considered
+  to be silence.  See the iRobot OI Specification for
+  more info. \\
+  The first argument is the song number (0-15).  The second argument
+  is the number of notes in the song (1-16).  The third arugment is a
+  byte array representing the song.  The even entries (0, 2, 4, etc.)
+  are the notes to play and the odd entries (1, 3, 5, etc.) are the
+  durations of these notes in increments of 1/64 of a second (so a
+  value of 32 would play the note for half a second).  The size of
+  this array should be equal to twice the second
+  argument. \\
+  \begin {params}
+  \item [number] Song number being stored (0-15)
+  \item [length] Number of notes in the song (1-16)
+  \item [song] Byte array containing notes and durations for the song
+  \end {params}
+  \retnorm
+
+\item \func {\cint playSong (\byte number)} {playsong} Plays a song
+  previously stored in the Create's memory.  This command will not do
+  anything if a song is already playing.  Check the Song Playing
+  sensor packet to determine if the Create is ready to play a song.
+  This command will return 0 if it was able to request a song from
+  the Create, regardless of whether or not it plays. \\
+  \begin {params}
+  \item [number] Song number to play (0-15)
+  \end {params}
+  \retnorm
+        
+\item \func {\cint writeScript (\byte* script, \byte size)}
+  {writescript} Sends the specified script the the Create's internal
+  memory.  A script can be up to 100
+  bytes long. \\
+  \begin {params}
+  \item [script] Script to send to Create
+  \item [size] Size, in bytes, of the script
+  \end {params}
+  \retnorm
+
+\item \func {\cint playScript ()} {playscript} Runs the script
+  currently stored in the Create's internal memory.  The script
+  remains in
+  memory after it is run, allowing it to be run multiple times. \\
+  \retnorm
+
+\item \func {\byte* getScript()} {getscript} Gets the currently stored
+  script from the Create and returns a pointer to it.  The first
+  data byte returned is the number of bytes in the script, followed by the script itself. \\
+  \ret Pointer to script or a NULL pointer on error
+\end {itemize}
+
+\subsection {Sensors}
+These functions allow you to read the Create's various sensors.  Many
+of these functions require an \oisensor value, which corresponds to
+one of the Create'e 42 sensor packets.
+
+\begin {itemize}
+\item \func {\cint readSensor (\oisensor packet)} {readsensor} Returns
+  data from the specified sensor in a user-readable format.  The
+  function will not
+  work for sensor groups, only single sensors.  Parameter can be one of \oisensor values. \\
+  \begin {params}
+  \item [sensor] The sensor to get data from
+  \end {params}
+  \ret Value read from specified sensor or \fail on error
+
+\item \func {\cint getDistance ()} {getdist} Returns the distance the
+  Create has travelled since the last time this function was called
+  or the last time the distance sensor was polled. \\
+  \ret Distance Create travelled since last reading or \fail on error
+
+\item \func {\cint getAngle ()} {getangle} Returns the angle the
+  Create has turned since the last time this function was called or
+  the
+  last time the angle sensor was polled. \\
+  \ret Angle Create turned since last reading or \fail on error
+
+\item \func {\cint getVelocity ()} {getvel} Returns the Create's
+  current velocity.  Note that this value may differ slightly from the
+  Create's actual velocity due to sensor inaccuracy and wheel slippage. \\
+  \ret Create's currently requested velocity or \fail on error
+
+\item \func {\cint getTurningRadius ()} {getturnrad} Returns the
+  Create's current turning radius.  Note that this value may differ
+  slightly from
+  the Create's actualy turning radius due to sensor inaccuracy and wheel slippage. \\
+  \ret Create's currently requested turning radius or \fail on error
+
+\item \func {\cint getBumpsAndWheelDrops ()} {getbawd} Returns the
+  current state of the bumper and wheel drop sensors.  The state of
+  each is represented as a single bit in the return value, as shown in
+  the chart below.
+  \begin {quote}
+    \begin {tabular} {l|c|c|c|c|c}
+      {\sf Bit}     & 4         & 3         & 2         & 1      & 0      \\
+      \hline
+      {\sf Decimal} & 16        & 8         & 4         & 2      & 1      \\
+      \hline
+      {\sf Sensor}  & Wheeldrop & Wheeldrop & Wheeldrop & Bumper & Bumper \\
+      & Caster    & Left      & Right     & Left   & Right  \\
+    \end {tabular}
+  \end {quote}
+  For example, a return value of 3 means that both the left and right
+  bumper sensors are
+  active since $3 = 2 + 1$. \\
+  \ret Current state of bumper and wheel drop sensors or \fail on
+  error
+
+\item \func {\cint getCliffs ()} {getcliffs} Returns the current
+  states of the four cliff sensors under the Create's bumper.  Each
+  sensor's state is represented as a single bit in the return value,
+  as shown in the chart below.
+  \begin {quote}
+    \begin {tabular} {l|c|c|c|c}
+      {\sf Bit}     & 3        & 2        & 1        & 0       \\
+      \hline
+      {\sf Decimal} & 8        & 4        & 2        & 1       \\
+      \hline
+      {\sf Sensor}  & Left     & Front    & Front    & Right   \\
+      &          & Left     & Right    &         \\
+    \end {tabular}
+  \end {quote}
+  For example, a return value of 12 means that the left and front left
+  cliff sensors are
+  active since $12 = 8 + 4$. \\
+  \ret Current state of cliff sensors or \fail on error
+
+
+\item \func {\cint getCharge ()} {getcharge}
+ Get the percentage charge for the Create's battery.\\
+  \ret battery charge level 0-100 or \fail on error
+
+
+\item \func {\cint* getAllSensors()} {getallsens} Returns a pointer to
+  the data from all sensors in the Create.  Sensors are in the order
+  given in the Create OI Specification (and in the chart \hyperlink
+  {oisensor}{here}),
+  starting with Bumps and Wheel Drops (packet 7). \\
+  Note that packets 15 and 16 are unused and so should always be 0. \\
+  \ret Pointer to array of sensor data or a NULL pointer on error.
+
+\item \func {\cint readRawSensor (\oisensor packet, \byte* buffer,
+    \cint size)} {readrawsensor} Requests the Create to return a
+  packet of sensor data which will be put, unformatted, into the
+  specified buffer.  Different sensors have different packet sizes, so
+  it is up to you to
+  make sure your buffer is the proper size. \\
+  It is recommended that \hyperlink {readsensor}{{\tt readSensor}} be
+  used instead, as it will
+  return properly formatted sensor data. \\
+  \begin {params}
+  \item [packet] Sensor packet to read
+  \item [buffer] Buffer to read raw packets into
+  \item [size] Number of bytes to read into buffer
+  \end {params}
+  \ret Number of bytes read or -1 on error
+        
+\item \func {\cint readRawSensorList (\oisensor* packet\_list, \byte
+    num\_packets, \byte* buffer, \cint size)} {readrawsensorlist}
+  Requests the Create to return multiple raw sensor data packets.  The
+  packets are returned in the order you specify.  It is up to you to
+  make sure you are reading the correct number of
+  bytes from the Create. \\
+  \begin {params}
+  \item [packet\_list] List of sensor packets to return
+  \item [num\_packets] Number of packets to get
+  \item [buffer] Buffer to read data into
+  \item [size] Number of bytes to read into buffer
+  \end {params}
+  \ret Number of bytes read or -1 on error
+\end {itemize}
+
+\subsection {Data Types} \hypertarget{datatypes}{} These are the
+different data types used for COIL functions.
+
+\subsubsection {byte} \hypertarget{oibyte}{} A byte is the same as an
+{\tt unsigned char} in C, which has a size of 8 bits.  The name
+``byte'' was used as it corresponds to the naming in the Create's
+documentation.  Range is from 0 to 255.
+
+\subsubsection {oi\_command} \hypertarget{oicommand}{} Defines
+constants for all of the opcodes available in the CreateOI.  You can
+use them should you want to write your own functions.  The values are
+in order of opcode.
+\begin {quote}
+  \begin {tabular} {l|l|l}
+    {\sf Type Value} & {\sf Opcode Name} & {\sf Opcode Number}\\
+    \hline
+    OPCODE\_START & Start & 128 \\
+    OPCODE\_BAUD & Baud & 129 \\
+    OPCODE\_SAFE & Safe & 131 \\
+    OPCODE\_FULL & Full & 132 \\
+    OPCODE\_SPOT	& Spot & 134 \\
+    OPCODE\_COVER & Cover & 135 \\
+    OPCODE\_DEMO & Demo & 136 \\
+    OPCODE\_DRIVE & Drive & 137 \\
+    OPCODE\_LOW\_SIDE\_DRIVERS & Low Side Drivers & 138 \\
+    OPCODE\_LED & LEDs & 139 \\
+    OPCODE\_SONG & Song & 140 \\
+    OPCODE\_PLAY\_SONG & Play Song & 141 \\
+    OPCODE\_SENSORS & Sensors & 142 \\
+    OPCODE\_COVER\_AND\_DOCK & Cover and Dock & 143 \\
+    OPCODE\_PWM\_LOW\_SIDE\_DRIVERS & PWM Low Side Drivers & 144 \\
+    OPCODE\_DRIVE\_DIRECT & Drive Direct & 145 \\
+    OPCODE\_DIGITAL\_OUTS & Digital Outputs & 147 \\
+    OPCODE\_STREAM & Stream & 148 \\
+    OPCODE\_QUERY\_LIST & Query List & 149 \\
+    OPCODE\_PAUSE\_RESUME\_STREAM & Pause/Resume Stream & 150 \\
+    OPCODE\_SEND\_IR & Send IR & 151 \\
+    OPCODE\_SCRIPT & Script & 152 \\
+    OPCODE\_PLAY\_SCRIPT & Play Script & 153 \\
+    OPCODE\_SHOW\_SCRIPT & Show Script & 154 \\
+    OPCODE\_WAIT\_TIME & Wait Time & 155 \\
+    OPCODE\_WAIT\_DISTANCE & Wait Distance & 156 \\
+    OPCODE\_WAIT\_ANGLE & Wait Angle & 157 \\
+    OPCODE\_WAIT\_EVENT & Wait Event & 158 \\
+  \end {tabular}
+\end {quote}
+
+\subsubsection {oi\_sensor} \hypertarget{oisensor}{} Defines constants
+for all 42 sensor packets available in the Create.  Not all packets
+are the same size.  Refer to the Create Open Interface documentation
+for more info.  The values are in order of
+sensor packet number.  Packets 16 and 17 are always unused and so are not listed. \\
+\\
+Sizes ending in ``U'' are unsigned (positive values only) and sizes
+ending in ``S'' are signed (positive or negative values).  It is up to
+your program to interpret these values correctly.  The first six
+packets are just groups of other packets which may be a mix of signed
+an unsigned bytes.
+\begin {quote}
+  \begin {tabular}{l|l|l}
+    {\sf Type Value} & {\sf Packet Name} & {\sf Packet Size in Bytes} \\
+    \hline
+    SENSOR\_GROUP\_0 & Group 0 (packets 7-26) & 26 \\
+    SENSOR\_GROUP\_1 & Group 1 (packets 7-16) & 10 \\
+    SENSOR\_GROUP\_2 & Group 2 (packets 17-20) & 6 \\
+    SENSOR\_GROUP\_3 & Group 3 (packets 21-26) & 10 \\
+    SENSOR\_GROUP\_4 & Group 4 (packets 27-34) & 14 \\
+    SENSOR\_GROUP\_5 & Group 5 (packets 35-42) & 12 \\
+    SENSOR\_GROUP\_ALL & All Sensors & 52 \\
+    SENSOR\_BUMPS\_AND\_WHEEL\_DROPS & Bumps and Wheel Drops & 1U \\
+    SENSOR\_WALL & Wall & 1U \\
+    SENSOR\_CLIFF\_LEFT & Cliff Left & 1U \\
+    SENSOR\_CLIFF\_FRONT\_LEFT & Cliff Front Left & 1U \\
+    SENSOR\_CLIFF\_FRONT\_RIGHT & Cliff Front Right & 1U \\
+    SENSOR\_CLIFF\_RIGHT & Cliff Right & 1U \\
+    SENSOR\_VIRTUAL\_WALL & Virtual Wall & 1U \\
+    SENSOR\_OVERCURRENT & Overcurrents & 1U \\
+    SENSOR\_INFRARED & Infrared Byte & 1U \\
+    SENSOR\_BUTTONS & Buttons & 1U \\
+    SENSOR\_DISTANCE & Distance & 2S \\
+    SENSOR\_ANGLE & Angle & 2S \\
+    SENSOR\_CHARGING\_STATE & Charging State & 1U \\
+    SENSOR\_VOLTAGE & Voltage & 2U \\
+    SENSOR\_CURRENT & Current & 2S \\
+    SENSOR\_BATTERY\_TEMP & Battery Temperature & 1S \\
+    SENSOR\_BATTERY\_CHARGE & Battery Charge & 2U \\
+    SENSOR\_BATTERY\_CAPACITY & Battery Capacity & 2U \\
+    SENSOR\_WALL\_SIGNAL & Wall Signal & 2U \\
+    SENSOR\_CLIFF\_LEFT\_SIGNAL & Cliff Left Signal & 2U \\
+    SENSOR\_CLIFF\_FRONT\_LEFT\_SIGNAL & Cliff Front Left Signal & 2U \\
+    SENSOR\_CLIFF\_FRONT\_RIGHT\_SIGNAL & Cliff Front Right Signal & 2U \\
+    SENSOR\_CLIFF\_RIGHT\_SIGNAL & Cliff Right Signal & 2U \\
+    SENSOR\_DIGITAL\_INPUTS & Cargo Bay Digital Inputs & 1U \\
+    SENSOR\_ANALOG\_SIGNAL & Cargo Bay Analog Signal & 2U \\
+    SENSOR\_CHARGING\_SOURCES\_AVAILABLE & Charging Sources Available & 1U \\
+    SENSOR\_OI\_MODE & OI Mode & 1U \\
+    SENSOR\_SONG\_NUMBER & Song Number & 1U \\
+    SENSOR\_SONG\_IS\_PLAYING & Song Playing & 1U \\
+    SENSOR\_NUM\_STREAM\_PACKETS & Number of Stream Packets & 1U \\
+    SENSOR\_REQUESTED\_VELOCITY & Requested Velocity & 2S \\
+    SENSOR\_REQUESTED\_RADIUS & Requested Radius & 2S \\
+    SENSOR\_REQUESTED\_RIGHT\_VEL & Requested Right Velocity & 2S \\
+    SENSOR\_REQUESTED\_LEFT\_VEL & Requested Left Velocity & 2S \\
+  \end {tabular}
+\end {quote}
+
+\subsubsection {oi\_baud} \hypertarget{oibaud}{} Codes to set the buad
+rate, in bits per second, at which data is sent over the serial port.
+The default is 56700bps.
+\begin {quote}
+  \begin {tabular}{l|l}
+    {\sf Type Value} & {\sf Speed in Bps} \\
+    \hline
+    BAUD300 & 300 \\
+    BAUD600 & 600 \\
+    BAUD1200 & 1200 \\
+    BAUD2400 & 2400 \\
+    BAUD4800 & 4800 \\
+    BAUD9600 & 9600 \\
+    BAUD14400 & 14400 \\
+    BAUD19200 & 19200 \\
+    BAUD28800 & 28800 \\
+    BAUD38400 & 38400 \\
+    BAUD57600 & 57600 \\
+    BAUD115200 & 115200 \\
+  \end {tabular}
+\end {quote}
+
+\subsubsection {oi\_demo} \hypertarget{oidemo}{} Codes for the
+built-in demos.
+\begin {quote}
+  \begin {tabular}{l|l}
+    {\sf Type Value} & {\sf Demo Name} \\
+    \hline
+    DEMO\_COVER & Cover \\
+    DEMO\_COVER\_AND\_DOCK & Cover and Dock \\
+    DEMO\_SPOT\_COVER & Spot Cover \\
+    DEMO\_MOUSE & Mouse \\
+    DEMO\_FIGURE\_EIGHT & Figure Eight \\
+    DEMO\_WIMP & Wimp \\
+    DEMO\_HOME & Home \\
+    DEMO\_TAG & Tag \\
+    DEMO\_PACHELBEL & Pachelbel \\
+    DEMO\_BANJO & Banjo \\
+    DEMO\_ABORT & Abort current demo \\
+  \end {tabular}
+\end {quote}
+
+\subsubsection {oi\_led} \hypertarget{oiled}{} Used for turning on and
+off the LEDs on top of the Create.
+\begin {quote}
+  \begin {tabular}{l|l}
+    {\sf Type Value} & {\sf LED Toggle} \\
+    \hline
+    LED\_ADVANCE & Advance Button LED \\
+    LED\_PLAY & Play Button LED \\
+  \end {tabular}
+\end{quote}
+
+\subsubsection {oi\_output} \hypertarget{oioutput}{} Used for setting
+the state of the digital and lowside outputs on the Cargo Bay
+connector.
+\begin {quote}
+  \begin {tabular}{l|l}
+    {\sf Type Value} & {\sf Output Number} \\
+    \hline
+    OUTPUT\_0 & Digital$\backslash$LSD Output 0 \\
+    OUTPUT\_1 & Digital$\backslash$LSD Output 1 \\
+    OUTPUT\_2 & Digital$\backslash$LSD Output 2 \\
+  \end {tabular}
+\end {quote}
+
+\newpage
+
+%OPENCV INFO DOESN'T REALLY BELONG HERE... MOVE IT TO THE WIKI.
+% \section {Intel OpenCV}
+% OpenCV is an open source computer vision library developed by Intel
+% and released under a BSD license.  This library runs under Windows,
+% Linux, and Mac OS X.  It is designed for real-time image processing,
+% which is useful for robot vision, but can also be used to process
+% static images and video.  OpenCV contains functions for manipulating
+% images and video and for creating basic shapes and graphs.  It also
+% includes functions to help with object detection, blob extraction, and
+% some machine learning algorithms.  It has a very basic GUI system
+% which can be used for writing simple
+% applications or for prototyping something you are working on. \\
+% \\
+% Check out the \href {http://opencvlibrary.sourceforge.net/} {OpenCV
+%   Wiki} to read more about what OpenCV can do and for a complete
+% function reference.  It is beyond the scope of this document to go
+% into further detail on how to use OpenCV; however, this section is
+% provided to help you get it
+% installed on your platform if you wish to try it out.  \\
+
+% \subsection {Installation on Linux} {\bf Note:} OpenCV and the
+% CreateOI library are installed in {\it /usr/local} by default, but
+% some Linux distributions do not look in there.  To tell it to do so,
+% create a new file in {\it /etc/ld.so.conf.d/}.  It should not matter
+% what you call the file, just end it with {\it .conf}.  In it, put the
+% path you need the distro to look in--in our case {\tt
+%   /usr/local/lib}--and save the file.  Now execute {\tt ldconfig -v}
+% as root in a terminal to make that path active.
+
+% \begin {enumerate}
+% \item Your webcam and distribution must support Video4Linux2.  In
+%   Ubuntu, you may need to install the {\tt lipt-plugins-v4l2} package
+%   for V4L2 to work properly.
+% \item You also need to have the UVC (USB Video Class) driver
+%   installed.  This is a generic driver that allows a wide range of
+%   webcams to plug in and ``just work'', similar to the way many flash
+%   drives work.  Use your distribution's package manager to find a UVC
+%   driver and install it.  If that does not work, you can get the
+%   source code by entering the following into a console.
+%   \begin {quote}
+%     {\tt svn checkout svn://svn.berlios.de/linux-uvc/linux-uvc/trunk
+%       linux-uvc}
+%   \end {quote}
+%   Follow the instructions included with the downloaded code to install
+%   the driver.
+% \item Use your distribution's package manager to get the following
+%   packages.  Unfortunately, you might need to do a bit of searching
+%   since not all distributions will necessarily have the same package
+%   names.  Download the {\em development} versions of these packages.
+%   \begin {itemize}
+%   \item GTK+ 2.x or higher including headers
+%   \item pkgconfig
+%   \item libpng, zlib, libjpeg, libtiff, libjasper
+%   \item Python 2.3, 2.4, or 2.5
+%   \item libavcodec (this will pull in other codec packages)
+%   \end {itemize}
+% \item Download the CVS version of OpenCV by entering the below
+%   commands into the console.  Press Enter when asked for a password.
+%   \begin {quote}
+%     {\tt cvs
+%       -d:pserver:anonymous@opencvlibrary.cvs.sourceforge.net:/cvsroot/opencvlibrary
+%       login}\\ \\
+%     {\tt cvs -z3
+%       -d:pserver:anonymous@opencvlibrary.cvs.sourceforge.net:/cvsroot/opencvlibrary
+%       co -P opencv}
+%   \end {quote}
+%   This will create a new subdirectory called {\it opencv}.  Change
+%   into it.
+% \item Now you can run {\bf ./configure}, {\bf make}, and finally {\bf
+%     make install} (run this with root permissions).  OpenCV will be
+%   installed in {\it /usr/local}.  You can run {\bf make check} if you
+%   want to make sure OpenCV has installed correctly.
+% \end {enumerate}
+
+% \subsection {Installation on OSX}
+% \begin {enumerate}
+% \item Get the latest CVS version of OpenCV by entering the following
+%   commands in the Terminal.  Press Enter when it asks you for a
+%   password.
+%   \begin {quote}
+%     {\tt cvs
+%       -d:pserver:anonymous@opencvlibrary.cvs.sourceforge.net:/cvsroot/opencvlibrary
+%       login}\\ \\
+%     {\tt cvs -z3
+%       -d:pserver:anonymous@opencvlibrary.cvs.sourceforge.net:/cvsroot/opencvlibrary
+%       co -P opencv}
+%   \end {quote}
+%   This will create a new subdirectory called {\it opencv}.  Change
+%   into it.
+% \item You need to configure OpenCV before you can build it.  Run {\bf
+%     ./configure} and let it do its thing.
+% \item Now you can run {\bf make}, and finally {\bf sudo make install}.
+%   OpenCV will be installed in {\it /usr/local}.  You can run {\bf make
+%     check} if you want to make sure OpenCV has installed correctly.
+% \item Open up a Terminal and go to your home directory.  Run {\bf nano
+%     .bashrc} to open or create the file called {\it .bashrc} for
+%   editing.  This file is used for user-specific settings for the
+%   Terminal.  Add the following lines to the file if they are not
+%   already there.
+%   \begin {quote}
+%     {\tt export PKG\_CONFIG\_PATH=\$PKG\_CONFIG\_PATH:/usr/local/lib/pkgconfig} \\
+%     {\tt export PATH=\$PATH:/usr/local/bin}
+%   \end {quote}
+%   Save the file using {\tt Ctrl + O} and exit nano with {\tt Ctrl +
+%     X}.  You may need to log out and back into OS X for these changes
+%   to take effect.
+% \end {enumerate}
+
+% \subsection {Compiling and Running a Program}
+% OpenCV may require you to include more than one additional header file
+% in your program to use its
+% functions.  See the sample programs included with this library for help. \\
+% \\
+% OpenCV makes use of the pkg-config system for compiling programs that
+% link against it.  This is more convenient than having to specify
+% include directories and libraries manually.  You can pass the output
+% of the {\bf pkg-config} to GCC using the Bash operator {\tt `}, as
+% shown below.
+
+% \begin {quote}
+%   {\tt gcc `pkg-config --cflags opencv` -o foo foo.c `pkg-config
+%     --libs opencv` -lcreateoi}
+% \end {quote}
+
+% Note that the {\tt `} marks are obtained by pressing the key with the
+% tilde ($\sim$) on it (next to the 1 key on US keyboards).
+
+\end {document}
