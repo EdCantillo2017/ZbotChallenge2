@@ -64,9 +64,9 @@ static int MystopWait(void);
 /** 
  * declarations
  **/
-int distance1 = Inches2mm(14);  // punch in a distance in inches 
-int distance2 = Inches2mm(45);  // punch in a distance in inches 
-int distance3 = Inches2mm(70);  // punch in a distance in inches 
+int distance1 = Inches2mm(13);  // punch in a distance in inches 
+int distance2 = Inches2mm(44);  // punch in a distance in inches 
+int distance3 = Inches2mm(62);  // punch in a distance in inches 
 int interrupt = 1;
 int iter=0;
 int PID_enabled = TRUE;
@@ -85,133 +85,15 @@ int main(int argc, char* argv[]) {
     sleep(10);	// allow the picher arm to initialize.
 				// this really takes ~10 seconds 
 				// but the execution of the Pincher tasks happen after the drive command   
-				
+	sendReachCmd();			
 	travelDistance(MASTER_DRV_SPEED, distance1); // travel the desired as the first characterization testing 
-    sendReachCmd();
     sendGrabCmd();
     sendParkCmd();
     travelDistance(MASTER_DRV_SPEED, distance2); // travel the desired as the first characterization testing 
     sendReachCmd();
     sendReleaseCmd();
     sendHomeCmd();
-    travelDistance(-MASTER_DRV_SPEED, distance3); // travel the desired as the first characterization testing 
-
- 
-#if 0
-	// start of the distance traveled routine 
-    float fact;  // trial and error
-    int current, error, previous_err, totalDist = 0;
-    directDrive(masterDrv,slaveDrv); // start both at the same speed 
-    //sleep(1);
-
-    while(1)
-    {
-		current = getDistance(); 
-		if (INT_MIN == current)
-			return INT_MIN;
-		totalDist += current;
-		printf("waitCurrent = %d & waitTotalDist = %d \r\n", current, totalDist);
-		if ((interrupt && MystopWait()) 
-		    || (distance >= 0 && totalDist >= distance) 
-		    || (distance < 0 && totalDist <= distance))
-			break;
-		
-		// PID controller but I am doing just Proportional 
-		// trial and error to determine the Kp value 
-		error = getLeftEncoder() - getRightEncoder(); // get the error from the encoders 
-		if (error != previous_err)
-		{
-			previous_err = error;
-			fact = error * KP_RATIO; //should be between 0 and 1
-			slaveDrv += fact;
-			directDrive(masterDrv, slaveDrv);  // left drive is the master drive 
-		}
-		usleep(60000);
-				       
-    }
-    directDrive(0,0);
-    
-    sleep(1);
-#endif    
-
-
-
-
-#if 0
-    directDrive(masterDrv,slaveDrv);
-    //int tickGoal = 11.25 * (distance/5); // 11.25 = ticks/5mm. travel distance  
-    int tickGoal = 2.25 * (distance); // 2.25 = ticks/mm. travel distance  
-    static int left_val, dist, error, previous_err = 0; 
-    static float fact;
-    while(abs(getLeftEncoder()) < tickGoal)
-    {
-#if 1 		
-		if (!(iter++ % SKIP_INT))
-		{
-			//fact = 2.2 * 0.2;
-			left_val = getLeftEncoder();
-			dist = (left_val/508.8)*(3.1415*72); 
-	        printf("Left encoder = %d \n\r", left_val );
-	        printf("Distance = %d \n\r", dist);
-	        printf("slave drive = %d \n\r", slaveDrv );
-	        printf("error = %d \n\r", error);
-	        printf("fact = %f \n\r" , fact);
-      
-		}
-		
-#endif 		
-		error = getLeftEncoder() - getRightEncoder(); // get the error from the encoders 
-		if (error != previous_err)
-		{
-			previous_err = error;
-			fact = error * KP_RATIO; //should be between 0 and 1
-			slaveDrv += fact;
-			directDrive(masterDrv, slaveDrv);  // left drive is the master drive 
-		}
-				
-		if (MystopWait())
-			break;
-		       
-    }
-    directDrive(0,0);
-    
-    sleep(1);
-#endif    
-
-#if 0    
-    directDrive(-100,-100);
-    
-    while(1)
-    {
-		if (getRightEncoder() < 0)
-			break;
-			
-		if (!(iter % SKIP_INT))
-		{
-	        printf("right encoder = %d \n\r", getRightEncoder());
-		}
-       
-    }
-#endif
-    
-
-
-#if 0	
-    while(1)
-    {
-       driveDistance (150, 0, Inches2mm(14), 1); // move to the block 1 ft away
-       sendReachCmd();
-       sendGrabCmd();
-       sendParkCmd();
-       driveDistance (150, 0, Inches2mm(48), 1); // move the 4 ft to the target
-       sendReachCmd();
-       sendReleaseCmd();
-       sendHomeCmd();
-       driveDistance (-150, 0, Inches2mm(60), 1); // move the 5 ft to the target
-       break;
-
-    } // end while
-#endif
+    travelDistance(-500, distance3); // travel the desired as the first characterization testing 
 
     stopOI_MT();  // close the comm ports 
     close(fd);
@@ -229,8 +111,6 @@ static int MystopWait(void)
 }
 
 
-
-#if 1 
 /** \brief travel the set speed for the set distance 
  * 
  * 	uses the encoder counts to determine the distance 
@@ -268,21 +148,22 @@ int travelDistance(int Speed, int distance)
 		
         if ( PID_enabled) 
         {
-            // PID controller but I am doing just Proportional 
-            // keep it simple stupid: apply KISS
-            // trial and error to determine the Kp value 
             error = getLeftEncoder() - getRightEncoder(); // get the error from the encoders 
             if ( error < 0 )
             {   // the right is faster
                 // subract from the right and add to left 
                 adjust = error/2;
                 printf("adjust < 0 %d \r\n", adjust);
+                if(adjust < -20 )
+                    adjust = -20;
                 directDrive(Speed+adjust, slaveDrv-adjust);  // left drive is the master drive 
             }
             if ( error > 0)
             { // the left is faster 
                 // subract from left and add to right 
                 adjust = error / 2;
+                if (adjust > 20 )
+                    adjust = 20;
                 printf("adjust > 0 %d \r\n", adjust);
                 directDrive(Speed-adjust, slaveDrv+adjust);  // left drive is the master drive 
             }
@@ -291,6 +172,10 @@ int travelDistance(int Speed, int distance)
 #if 0            
             if (error != previous_err)
             {
+            // PID controller but I am doing just Proportional 
+            // keep it simple stupid: apply KISS
+            // trial and error to determine the Kp value 
+
                 previous_err = error;
                 fact = error * KP_RATIO; //should be between 0 and 1. TODO: interger math 
                 slaveDrv += fact;
@@ -306,6 +191,6 @@ int travelDistance(int Speed, int distance)
     sleep(1);
     return 0;
 }
-#endif 
+
 
 
